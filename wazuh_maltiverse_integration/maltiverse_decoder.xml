@@ -1,0 +1,6 @@
+<decoder name="maltiverse">
+  <program_name>maltiverse</program_name>
+  <prematch type="pcre2">^\[MALTIVERSE\]\s</prematch>
+  <regex type="pcre2">IP=(\S+)\sMalicious=(\S+)</regex>
+  <order>srcip, extra_data</order>
+</decoder>

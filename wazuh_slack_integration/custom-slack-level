@@ -1,0 +1,118 @@
+#!/usr/bin/env python3
+# Modified script to send Wazuh alerts to different Slack channels based on alert levels.
+
+import json
+import sys
+import time
+import os
+import requests
+
+# Define your webhooks here
+Medium_alert = "https://hooks.slack.com/services/T091ZEBL3LL/xxxxxxxx"      # For alerts level 7 to 11
+High_alert = "https://hooks.slack.com/services/T091ZEBL3LL/xxxxx"       # For alerts level 12 to 14
+Critical_alert = "https://hooks.slack.com/services/T091ZEBL3LL/xxxxx" 	# For alerts level 15 and above
+
+debug_enabled = False
+pwd = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+json_alert = {}
+now = time.strftime("%a %b %d %H:%M:%S %Z %Y")
+log_file = '{0}/logs/integrations.log'.format(pwd)
+
+def main(args):
+    debug("# Starting")
+    
+    # Read args
+    alert_file_location = args[1]
+    
+    debug("# File location")
+    debug(alert_file_location)
+    
+    # Load alert. Parse JSON object.
+    with open(alert_file_location) as alert_file:
+        json_alert = json.load(alert_file)
+    
+    debug("# Processing alert")
+    debug(json_alert)
+    
+    debug("# Generating message")
+    msg = generate_msg(json_alert)
+    debug(msg)
+    
+    # Determine the webhook URL based on the alert level
+    webhook = select_webhook(json_alert['rule']['level'])
+    
+    debug("# Sending message")
+    send_msg(msg, webhook)
+
+def select_webhook(level):
+    if 7<= level <= 11:
+        return medium_alert
+    elif 12 <= level <= 14:
+        return high_alert
+    else:
+        return critical_alert
+
+def debug(msg):
+    if debug_enabled:
+        msg = "{0}: {1}\n".format(now, msg)
+        print(msg)
+        with open(log_file, "a") as f:
+            f.write(msg)
+
+def generate_msg(alert):
+    level = alert['rule']['level']
+
+    if 7<= level <= 11:
+        color = "#FFA500"
+    elif 12 <= level <= 14:
+        color = "#FF0000"
+    else:
+        color = "danger"
+
+    msg = {
+        'color': color,
+        'pretext': "WAZUH Alert",
+        'title': alert['rule'].get('description', "N/A"),
+        'text': alert.get('full_log', ''),  
+        'fields': []
+    }
+
+    if 'agent' in alert:
+        msg['fields'].append({
+            "title": "Agent",
+            "value": "({0}) - {1}".format(alert['agent']['id'], alert['agent']['name']),
+        })
+    if 'agentless' in alert:
+        msg['fields'].append({
+            "title": "Agentless Host",
+            "value": alert['agentless']['host'],
+        })
+    
+    msg['fields'].append({"title": "Location", "value": alert['location']})
+    msg['fields'].append({
+        "title": "Rule ID",
+        "value": "{0} _(Level {1})_".format(alert['rule']['id'], level),
+    })
+
+    msg['ts'] = alert['id']
+    attach = {'attachments': [msg]}
+
+    return json.dumps(attach)
+
+def send_msg(msg, url):
+    headers = {'content-type': 'application/json', 'Accept-Charset': 'UTF-8'}
+    res = requests.post(url, data=msg, headers=headers)
+    debug(res)
+
+if __name__ == "__main__":
+    try:
+        if len(sys.argv) >= 2:
+            debug_enabled = (len(sys.argv) > 2 and sys.argv[2] == 'debug')
+        else:
+            sys.exit(1)
+        
+        main(sys.argv)
+
+    except Exception as e:
+        debug(str(e))
+        raise

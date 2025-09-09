@@ -1,0 +1,117 @@
+#!/usr/bin/env python3
+
+import json
+import sys
+import time
+import os
+
+try:
+    import requests
+except Exception:
+    print("No module 'requests' found. Install it with: pip install requests")
+    sys.exit(1)
+
+# Global vars
+debug_enabled = False
+pwd = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+log_file = os.path.join(pwd, "logs", "integrations.log")
+now = time.strftime("%a %b %d %H:%M:%S %Z %Y")
+
+# Slack webhooks
+server = "https://hooks.slack.com/services/T091ZEBxxx/xxxxxxxx" 
+windows_11 = "https://hooks.slack.com/services/T091ZEBxxx/xxxxxxxxxx" 
+# Add more agents...
+
+def debug(msg):
+    if debug_enabled:
+        log_msg = f"{now}: {msg}\n"
+        print(log_msg)
+        with open(log_file, "a") as f:
+            f.write(log_msg)
+
+def generate_and_send_msg(alert):
+    try:
+        level = alert['rule']['level']
+
+        # Slack color code based on level
+        if 7<= level <= 11:
+            color = "#FFA500"
+        elif 12 <= level <= 14:
+            color = "#FF0000"
+        else:
+            color = "danger"
+
+        agent_id = alert.get('agent', {}).get('id')
+        agent_name = alert.get('agent', {}).get('name', 'Unknown')
+
+        msg = {
+            "color": color,
+            "pretext": "WAZUH Alert",
+            "title": alert['rule'].get('description', "N/A"),
+            "text": alert.get('full_log', "No full_log available"),
+            "fields": [
+                {"title": "Agent", "value": f"({agent_id}) - {agent_name}"},
+                {"title": "Location", "value": alert.get("location", "N/A")},
+                {"title": "Rule ID", "value": f"{alert['rule']['id']} _(Level {level})_"},
+            ],
+            "ts": alert.get('id')
+        }
+
+        # Add agentless if available
+        if 'agentless' in alert:
+            msg['fields'].append({
+                "title": "Agentless Host",
+                "value": alert['agentless'].get('host', 'Unknown'),
+            })
+
+        payload = {'attachments': [msg]}
+        headers = {'content-type': 'application/json'}
+
+        # Select webhook based on agent ID
+        if agent_id == "000":
+            webhook = server
+        elif agent_id == "001":
+            webhook = windows_11
+        # Add condition if more than 2 agents
+        else:
+            debug(f"# ERROR: Unknown agent ID: {agent_id}")
+            return
+
+        debug(f"# Sending to Slack: {json.dumps(payload)}")
+        response = requests.post(webhook, json=payload, headers=headers)
+        debug(f"# Slack response: {response.status_code} - {response.text}")
+
+    except Exception as e:
+        debug(f"# CRITICAL ERROR: {str(e)}")
+
+def main(args):
+    try:
+        alert_file = args[1]
+        debug(f"# Reading alert file: {alert_file}")
+        with open(alert_file) as f:
+            alert = json.load(f)
+
+        generate_and_send_msg(alert)
+
+    except Exception as e:
+        debug(f"# ERROR in main: {str(e)}")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    try:
+        # Enable debug if "debug" is passed in args
+        debug_enabled = any("debug" in arg.lower() for arg in sys.argv)
+
+        # Log the call
+        with open(log_file, "a") as f:
+            f.write(f"{now} - Invoked with: {' '.join(sys.argv)}\n")
+
+        if len(sys.argv) < 2:
+            debug("# Exiting: Missing alert file argument.")
+            sys.exit(1)
+
+        main(sys.argv)
+
+    except Exception as e:
+        debug(f"# UNHANDLED ERROR: {str(e)}")
+        sys.exit(1)

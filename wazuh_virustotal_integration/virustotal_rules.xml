@@ -1,0 +1,6 @@
+<group name="virustotal,">
+  <rule id="100015" level="13">
+    <decoded_as>virustotal</decoded_as>
+    <description>Malicious IP detected by VirusTotal. Review required.</description>
+  </rule>
+</group>

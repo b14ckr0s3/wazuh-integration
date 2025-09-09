@@ -1,0 +1,6 @@
+<decoder name="virustotal">
+  <program_name>virustotal</program_name>
+  <prematch type="pcre2">^\[VIRUSTOTAL\]\s</prematch>
+  <regex type="pcre2">IP=(\S+)\sMalicious=(\d+)</regex>
+  <order>srcip, extra_data</order>
+</decoder>

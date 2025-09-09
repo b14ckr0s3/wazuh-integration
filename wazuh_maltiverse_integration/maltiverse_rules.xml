@@ -1,0 +1,6 @@
+<group name="maltiverse">
+  <rule id="100016" level="13">
+    <decoded_as>maltiverse</decoded_as>
+    <description>Confirmed malicious IP detected by Maltiverse. Review required.</description>
+  </rule>
+</group>
